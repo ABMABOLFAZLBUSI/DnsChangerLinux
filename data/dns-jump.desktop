@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=DNS Jump
+GenericName=DNS Switcher
+Comment=Switch DNS servers and flush the DNS cache
+Exec=dns-jump
+Icon=io.github.DnsJump
+Terminal=false
+Type=Application
+Categories=Network;System;Settings;
+Keywords=DNS;Network;Resolver;NetworkManager;
+StartupNotify=true

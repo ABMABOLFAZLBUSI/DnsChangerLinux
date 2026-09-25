@@ -1,0 +1,45 @@
+# Local-source PKGBUILD — build from the parent repo directory:
+#   cd packaging && makepkg -si
+pkgname=dns-jump
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Minimal DNS switcher for Linux (NetworkManager), inspired by DNS Jumper"
+arch=('x86_64' 'aarch64')
+url="https://github.com/DnsJump/dns-jump"
+license=('MIT')
+depends=('gtk4' 'libadwaita' 'networkmanager' 'gcc-libs' 'glibc')
+makedepends=('cargo' 'pkgconf')
+optdepends=('systemd: flush DNS cache via resolvectl')
+install=dns-jump.install
+options=('!lto')
+
+_srcdir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+prepare() {
+  cd "$_srcdir"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')" 2>/dev/null \
+    || cargo fetch --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$_srcdir"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR="${srcdir:-/tmp}/dns-jump-target"
+  cargo build --release --bin dns-jump
+}
+
+package() {
+  cd "$_srcdir"
+  local bin="${srcdir:-/tmp}/dns-jump-target/release/dns-jump"
+  if [[ ! -x "$bin" ]]; then
+    bin="$_srcdir/target/release/dns-jump"
+  fi
+  install -Dm755 "$bin" "$pkgdir/usr/bin/dns-jump"
+  install -Dm644 "data/dns-jump.desktop" "$pkgdir/usr/share/applications/dns-jump.desktop"
+  install -Dm644 "data/icons/hicolor/scalable/apps/io.github.DnsJump.svg" \
+    "$pkgdir/usr/share/icons/hicolor/scalable/apps/io.github.DnsJump.svg"
+  install -Dm644 "data/io.github.DnsJump.metainfo.xml" \
+    "$pkgdir/usr/share/metainfo/io.github.DnsJump.metainfo.xml"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

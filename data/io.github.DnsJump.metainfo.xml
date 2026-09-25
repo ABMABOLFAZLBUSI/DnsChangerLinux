@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.DnsJump</id>
+  <name>DNS Jump</name>
+  <summary>Switch DNS servers and flush DNS cache</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <description>
+    <p>
+      DNS Jump is a compact Linux GUI inspired by DNS Jumper for Windows.
+      Pick a NetworkManager connection, apply a DNS preset or custom servers,
+      benchmark resolve latency, backup and restore settings, and flush the DNS cache.
+    </p>
+  </description>
+  <launchable type="desktop-id">dns-jump.desktop</launchable>
+  <url type="homepage">https://github.com/DnsJump/dns-jump</url>
+  <provides>
+    <binary>dns-jump</binary>
+  </provides>
+  <recommends>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </recommends>
+  <categories>
+    <category>Network</category>
+    <category>System</category>
+  </categories>
+</component>
