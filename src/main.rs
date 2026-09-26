@@ -54,10 +54,13 @@ enum Msg {
     AddServerClose,
     AddServerSave {
         name: String,
-        ipv4: String,
-        ipv6: String,
+        ipv4_primary: String,
+        ipv4_secondary: String,
+        include_ipv6: bool,
+        ipv6_primary: String,
+        ipv6_secondary: String,
     },
-    DeleteSelected,
+    DeleteServer(String),
     ShowAddGroup,
     AddGroupClose,
     AddGroupSave(String),
@@ -90,8 +93,8 @@ impl SimpleComponent for AppModel {
         #[root]
         adw::Window {
             set_title: Some("DNS Jump"),
-            set_default_width: 440,
-            set_default_height: 620,
+            set_default_width: 460,
+            set_default_height: 680,
 
             #[local_ref]
             toast_overlay -> adw::ToastOverlay {
@@ -127,16 +130,6 @@ impl SimpleComponent for AppModel {
                                         connect_clicked => Msg::RestoreBackup,
                                     },
                                     gtk::Button {
-                                        set_label: "Add custom DNS",
-                                        set_has_frame: false,
-                                        connect_clicked => Msg::ShowAddServer,
-                                    },
-                                    gtk::Button {
-                                        set_label: "Delete selected custom DNS",
-                                        set_has_frame: false,
-                                        connect_clicked => Msg::DeleteSelected,
-                                    },
-                                    gtk::Button {
                                         set_label: "Add group",
                                         set_has_frame: false,
                                         connect_clicked => Msg::ShowAddGroup,
@@ -169,19 +162,15 @@ impl SimpleComponent for AppModel {
 
                         gtk::Box {
                             set_orientation: gtk::Orientation::Vertical,
-                            set_spacing: 12,
-                            set_margin_all: 16,
+                            set_spacing: 20,
+                            set_margin_top: 20,
+                            set_margin_bottom: 20,
+                            set_margin_start: 18,
+                            set_margin_end: 18,
 
                             adw::PreferencesGroup {
                                 set_title: "Connection",
                                 set_description: Some("NetworkManager profile to update"),
-
-                                #[name = "conn_dropdown"]
-                                gtk::DropDown {
-                                    connect_selected_notify[sender] => move |dd| {
-                                        sender.input(Msg::SelectConnection(dd.selected()));
-                                    },
-                                },
 
                                 adw::ActionRow {
                                     set_title: "Current DNS",
@@ -190,92 +179,115 @@ impl SimpleComponent for AppModel {
                                 },
                             },
 
+                            #[name = "conn_dropdown"]
+                            gtk::DropDown {
+                                set_margin_top: 4,
+                                connect_selected_notify[sender] => move |dd| {
+                                    sender.input(Msg::SelectConnection(dd.selected()));
+                                },
+                            },
+
                             adw::PreferencesGroup {
                                 set_title: "Group",
+                            },
 
-                                #[name = "group_dropdown"]
-                                gtk::DropDown {
-                                    connect_selected_notify[sender] => move |dd| {
-                                        sender.input(Msg::SelectGroup(dd.selected()));
-                                    },
+                            #[name = "group_dropdown"]
+                            gtk::DropDown {
+                                set_margin_top: 4,
+                                connect_selected_notify[sender] => move |dd| {
+                                    sender.input(Msg::SelectGroup(dd.selected()));
                                 },
                             },
 
                             adw::PreferencesGroup {
                                 set_title: "DNS servers",
-                                set_description: Some("Select a preset or custom server"),
+                                set_description: Some("Select a preset or add a custom server"),
 
-                                #[name = "server_list"]
-                                gtk::ListBox {
-                                    add_css_class: "boxed-list",
-                                    set_selection_mode: gtk::SelectionMode::None,
+                                #[wrap(Some)]
+                                set_header_suffix = &gtk::Button {
+                                    set_icon_name: "list-add-symbolic",
+                                    set_tooltip_text: Some("Add custom DNS"),
+                                    set_valign: gtk::Align::Center,
+                                    add_css_class: "flat",
+                                    connect_clicked => Msg::ShowAddServer,
                                 },
                             },
 
-                            adw::PreferencesGroup {
-                                set_title: "Actions",
+                            #[name = "server_list"]
+                            gtk::ListBox {
+                                add_css_class: "boxed-list",
+                                add_css_class: "dns-server-list",
+                                set_selection_mode: gtk::SelectionMode::None,
+                                set_margin_top: 6,
+                            },
+
+                            gtk::Box {
+                                set_orientation: gtk::Orientation::Vertical,
+                                set_spacing: 10,
+                                set_margin_top: 8,
+
+                                gtk::Label {
+                                    set_label: "Actions",
+                                    set_xalign: 0.0,
+                                    add_css_class: "heading",
+                                },
+
+                                gtk::Button {
+                                    set_label: "Apply DNS",
+                                    add_css_class: "suggested-action",
+                                    set_height_request: 40,
+                                    #[watch]
+                                    set_sensitive: !model.busy,
+                                    connect_clicked => Msg::Apply,
+                                },
 
                                 gtk::Box {
-                                    set_orientation: gtk::Orientation::Vertical,
-                                    set_spacing: 8,
-                                    set_margin_top: 8,
-                                    set_margin_bottom: 8,
-                                    set_margin_start: 12,
-                                    set_margin_end: 12,
+                                    set_orientation: gtk::Orientation::Horizontal,
+                                    set_spacing: 10,
+                                    set_homogeneous: true,
 
                                     gtk::Button {
-                                        set_label: "Apply DNS",
-                                        add_css_class: "suggested-action",
+                                        set_label: "Restore Auto",
                                         #[watch]
                                         set_sensitive: !model.busy,
-                                        connect_clicked => Msg::Apply,
+                                        connect_clicked => Msg::RestoreAuto,
                                     },
-
-                                    gtk::Box {
-                                        set_orientation: gtk::Orientation::Horizontal,
-                                        set_spacing: 8,
-                                        set_homogeneous: true,
-
-                                        gtk::Button {
-                                            set_label: "Restore Auto",
-                                            #[watch]
-                                            set_sensitive: !model.busy,
-                                            connect_clicked => Msg::RestoreAuto,
-                                        },
-                                        gtk::Button {
-                                            set_label: "Flush Cache",
-                                            #[watch]
-                                            set_sensitive: !model.busy,
-                                            connect_clicked => Msg::Flush,
-                                        },
-                                    },
-
-                                    gtk::Box {
-                                        set_orientation: gtk::Orientation::Horizontal,
-                                        set_spacing: 8,
-                                        set_homogeneous: true,
-
-                                        gtk::Button {
-                                            set_label: "Benchmark",
-                                            #[watch]
-                                            set_sensitive: !model.busy,
-                                            connect_clicked => Msg::Benchmark,
-                                        },
-                                        gtk::Button {
-                                            set_label: "Apply Fastest",
-                                            #[watch]
-                                            set_sensitive: !model.busy,
-                                            connect_clicked => Msg::ApplyFastest,
-                                        },
-                                    },
-
-                                    gtk::Label {
+                                    gtk::Button {
+                                        set_label: "Flush Cache",
                                         #[watch]
-                                        set_label: &model.status,
-                                        set_wrap: true,
-                                        set_xalign: 0.0,
-                                        add_css_class: "dim-label",
+                                        set_sensitive: !model.busy,
+                                        connect_clicked => Msg::Flush,
                                     },
+                                },
+
+                                gtk::Box {
+                                    set_orientation: gtk::Orientation::Horizontal,
+                                    set_spacing: 10,
+                                    set_homogeneous: true,
+
+                                    gtk::Button {
+                                        set_label: "Benchmark",
+                                        set_tooltip_text: Some("Benchmark servers in the selected group"),
+                                        #[watch]
+                                        set_sensitive: !model.busy,
+                                        connect_clicked => Msg::Benchmark,
+                                    },
+                                    gtk::Button {
+                                        set_label: "Apply Fastest",
+                                        set_tooltip_text: Some("Apply the fastest server in the selected group"),
+                                        #[watch]
+                                        set_sensitive: !model.busy,
+                                        connect_clicked => Msg::ApplyFastest,
+                                    },
+                                },
+
+                                gtk::Label {
+                                    #[watch]
+                                    set_label: &model.status,
+                                    set_wrap: true,
+                                    set_xalign: 0.0,
+                                    set_margin_top: 4,
+                                    add_css_class: "dim-label",
                                 },
                             },
                         },
@@ -372,6 +384,8 @@ impl SimpleComponent for AppModel {
 
             Msg::SelectGroup(idx) => {
                 self.selected_group_idx = idx as usize;
+                self.latencies.clear();
+                self.apply_fastest_after_bench = false;
                 self.rebuild_server_list(&sender);
             },
 
@@ -491,12 +505,21 @@ impl SimpleComponent for AppModel {
                 sender.input(Msg::Busy(true));
                 self.status = "Benchmarking…".into();
                 let domain = self.config.test_domain.clone();
+                let group_id = self.selected_group_id();
                 let pairs: Vec<(String, String)> = self
                     .config
                     .servers
                     .iter()
+                    .filter(|s| s.group == group_id)
                     .filter_map(|s| s.ipv4.first().map(|ip| (s.id.clone(), ip.clone())))
                     .collect();
+                if pairs.is_empty() {
+                    sender.input(Msg::Busy(false));
+                    self.status = "No servers in this group to benchmark".into();
+                    self.toast("No servers in this group");
+                    self.apply_fastest_after_bench = false;
+                    return;
+                }
                 std::thread::spawn(move || {
                     let results = benchmark_servers(&pairs, &domain, 2500);
                     sender.input(Msg::BenchmarkDone(results));
@@ -544,9 +567,15 @@ impl SimpleComponent for AppModel {
                     sender.input(Msg::Benchmark);
                     return;
                 }
-                // Find min latency among known
+                let group_id = self.selected_group_id();
                 let mut best: Option<(String, u64)> = None;
                 for (id, label) in &self.latencies {
+                    let in_group = find_server(&self.config, id)
+                        .map(|s| s.group == group_id)
+                        .unwrap_or(false);
+                    if !in_group {
+                        continue;
+                    }
                     if let Some(ms_str) = label.strip_suffix(" ms") {
                         if let Ok(ms) = ms_str.parse::<u64>() {
                             let better = best.as_ref().map(|(_, b)| ms < *b).unwrap_or(true);
@@ -560,7 +589,8 @@ impl SimpleComponent for AppModel {
                     self.selected_server_id = Some(id);
                     sender.input(Msg::Apply);
                 } else {
-                    self.toast("Run Benchmark first");
+                    self.apply_fastest_after_bench = true;
+                    sender.input(Msg::Benchmark);
                 }
             },
 
@@ -701,24 +731,44 @@ impl SimpleComponent for AppModel {
             Msg::ShowAddServer => {
                 let dialog = adw::Dialog::new();
                 dialog.set_title("Add custom DNS");
-                dialog.set_content_width(380);
+                dialog.set_content_width(400);
 
-                let box_ = gtk::Box::new(gtk::Orientation::Vertical, 10);
+                let box_ = gtk::Box::new(gtk::Orientation::Vertical, 12);
                 box_.set_margin_all(16);
 
                 let name = gtk::Entry::new();
                 name.set_placeholder_text(Some("Name"));
-                let ipv4 = gtk::Entry::new();
-                ipv4.set_placeholder_text(Some("IPv4 (space-separated)"));
-                let ipv6 = gtk::Entry::new();
-                ipv6.set_placeholder_text(Some("IPv6 (optional, space-separated)"));
+
+                let ipv4_primary = gtk::Entry::new();
+                ipv4_primary.set_placeholder_text(Some("Primary IPv4"));
+                let ipv4_secondary = gtk::Entry::new();
+                ipv4_secondary.set_placeholder_text(Some("Secondary IPv4 (optional)"));
+
+                let ipv6_check = gtk::CheckButton::with_label("Also add IPv6");
+                ipv6_check.set_active(false);
+
+                let ipv6_box = gtk::Box::new(gtk::Orientation::Vertical, 8);
+                ipv6_box.set_visible(false);
+                let ipv6_primary = gtk::Entry::new();
+                ipv6_primary.set_placeholder_text(Some("Primary IPv6"));
+                let ipv6_secondary = gtk::Entry::new();
+                ipv6_secondary.set_placeholder_text(Some("Secondary IPv6 (optional)"));
+                ipv6_box.append(&ipv6_primary);
+                ipv6_box.append(&ipv6_secondary);
+
+                let ipv6_box_toggle = ipv6_box.clone();
+                ipv6_check.connect_toggled(move |check| {
+                    ipv6_box_toggle.set_visible(check.is_active());
+                });
 
                 let save = gtk::Button::with_label("Add");
                 save.add_css_class("suggested-action");
 
                 box_.append(&name);
-                box_.append(&ipv4);
-                box_.append(&ipv6);
+                box_.append(&ipv4_primary);
+                box_.append(&ipv4_secondary);
+                box_.append(&ipv6_check);
+                box_.append(&ipv6_box);
                 box_.append(&save);
                 dialog.set_child(Some(&box_));
 
@@ -726,8 +776,11 @@ impl SimpleComponent for AppModel {
                 save.connect_clicked(move |_| {
                     sender2.input(Msg::AddServerSave {
                         name: name.text().to_string(),
-                        ipv4: ipv4.text().to_string(),
-                        ipv6: ipv6.text().to_string(),
+                        ipv4_primary: ipv4_primary.text().to_string(),
+                        ipv4_secondary: ipv4_secondary.text().to_string(),
+                        include_ipv6: ipv6_check.is_active(),
+                        ipv6_primary: ipv6_primary.text().to_string(),
+                        ipv6_secondary: ipv6_secondary.text().to_string(),
                     });
                     sender2.input(Msg::AddServerClose);
                 });
@@ -737,41 +790,58 @@ impl SimpleComponent for AppModel {
 
             Msg::AddServerClose => {}
 
-            Msg::AddServerSave { name, ipv4, ipv6 } => {
+            Msg::AddServerSave {
+                name,
+                ipv4_primary,
+                ipv4_secondary,
+                include_ipv6,
+                ipv6_primary,
+                ipv6_secondary,
+            } => {
                 let name = name.trim().to_string();
                 if name.is_empty() {
                     self.toast("Name is required");
                     return;
                 }
-                let ipv4: Vec<String> = ipv4
-                    .split_whitespace()
-                    .map(str::to_string)
-                    .filter(|s| !s.is_empty())
-                    .collect();
+                let mut ipv4 = Vec::new();
+                let primary = ipv4_primary.trim();
+                if !primary.is_empty() {
+                    ipv4.push(primary.to_string());
+                }
+                let secondary = ipv4_secondary.trim();
+                if !secondary.is_empty() {
+                    ipv4.push(secondary.to_string());
+                }
                 if ipv4.is_empty() {
                     self.toast("At least one IPv4 address is required");
                     return;
                 }
-                let ipv6: Vec<String> = ipv6
-                    .split_whitespace()
-                    .map(str::to_string)
-                    .filter(|s| !s.is_empty())
-                    .collect();
-                let id = add_custom_server(&mut self.config, name, ipv4, ipv6, None);
+                let mut ipv6 = Vec::new();
+                if include_ipv6 {
+                    let primary = ipv6_primary.trim();
+                    if !primary.is_empty() {
+                        ipv6.push(primary.to_string());
+                    }
+                    let secondary = ipv6_secondary.trim();
+                    if !secondary.is_empty() {
+                        ipv6.push(secondary.to_string());
+                    }
+                }
+                let group = Some(self.selected_group_id());
+                let id = add_custom_server(&mut self.config, name, ipv4, ipv6, group);
                 self.selected_server_id = Some(id);
+                self.config.selected_server_id = self.selected_server_id.clone();
                 let _ = save_config(&self.config);
                 self.rebuild_server_list(&sender);
                 self.toast("Custom DNS added");
             },
 
-            Msg::DeleteSelected => {
-                let Some(id) = self.selected_server_id.clone() else {
-                    self.toast("Nothing selected");
-                    return;
-                };
+            Msg::DeleteServer(id) => {
                 if remove_server(&mut self.config, &id) {
-                    self.selected_server_id = None;
-                    self.config.selected_server_id = None;
+                    if self.selected_server_id.as_deref() == Some(id.as_str()) {
+                        self.selected_server_id = None;
+                        self.config.selected_server_id = None;
+                    }
                     let _ = save_config(&self.config);
                     self.rebuild_server_list(&sender);
                     self.toast("Custom DNS removed");
@@ -855,6 +925,14 @@ impl AppModel {
         find_server(&self.config, id)
     }
 
+    fn selected_group_id(&self) -> String {
+        self.config
+            .groups
+            .get(self.selected_group_idx)
+            .map(|g| g.id.clone())
+            .unwrap_or_else(|| "public".into())
+    }
+
     fn refresh_current_dns(&self, sender: &ComponentSender<Self>) {
         let Some(conn) = self.selected_connection() else {
             return;
@@ -929,14 +1007,9 @@ impl AppModel {
     }
 
     fn rebuild_server_list(&self, sender: &ComponentSender<Self>) {
-        let group_id = self
-            .config
-            .groups
-            .get(self.selected_group_idx)
-            .map(|g| g.id.clone())
-            .unwrap_or_else(|| "public".into());
+        let group_id = self.selected_group_id();
 
-        let servers: Vec<(String, String, String, bool)> = self
+        let servers: Vec<(String, String, String, bool, bool)> = self
             .config
             .servers
             .iter()
@@ -954,7 +1027,7 @@ impl AppModel {
                     format!("{ips} · {lat}")
                 };
                 let selected = self.selected_server_id.as_deref() == Some(s.id.as_str());
-                (s.id.clone(), s.name.clone(), subtitle, selected)
+                (s.id.clone(), s.name.clone(), subtitle, selected, s.builtin)
             })
             .collect();
 
@@ -965,14 +1038,26 @@ impl AppModel {
                     while let Some(child) = list.first_child() {
                         list.remove(&child);
                     }
-                    for (id, name, subtitle, selected) in servers {
+                    for (id, name, subtitle, selected, builtin) in servers {
                         let row = adw::ActionRow::new();
                         row.set_title(&name);
                         row.set_subtitle(&subtitle);
                         row.set_activatable(true);
                         if selected {
                             let check = gtk::Image::from_icon_name("object-select-symbolic");
-                            row.add_suffix(&check);
+                            row.add_prefix(&check);
+                        }
+                        if !builtin {
+                            let delete_btn = gtk::Button::from_icon_name("user-trash-symbolic");
+                            delete_btn.set_tooltip_text(Some("Delete custom DNS"));
+                            delete_btn.add_css_class("flat");
+                            delete_btn.set_valign(gtk::Align::Center);
+                            let sender_del = sender.clone();
+                            let del_id = id.clone();
+                            delete_btn.connect_clicked(move |_| {
+                                sender_del.input(Msg::DeleteServer(del_id.clone()));
+                            });
+                            row.add_suffix(&delete_btn);
                         }
                         let sender2 = sender.clone();
                         row.connect_activated(move |_| {
@@ -1010,8 +1095,7 @@ fn find_list_box(win: &adw::Window) -> Option<gtk::ListBox> {
     let mut found = None;
     walk_widgets(win.upcast_ref(), &mut |w| {
         if let Ok(lb) = w.clone().downcast::<gtk::ListBox>() {
-            // Prefer the boxed-list used for servers
-            if lb.has_css_class("boxed-list") {
+            if lb.has_css_class("dns-server-list") {
                 found = Some(lb);
             }
         }
